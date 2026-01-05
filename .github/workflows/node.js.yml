@@ -1,4 +1,4 @@
-name: Build and Deploy Vite to GitHub Pages
+name: Build and Deploy SQL Playground to GitHub Pages
 
 on:
   push:
