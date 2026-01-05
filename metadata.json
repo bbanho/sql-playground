@@ -1,0 +1,5 @@
+{
+  "name": "Research SQL Trainer",
+  "description": "An interactive SQL training platform using in-browser DuckDB WASM to teach relational database concepts through gamified missions.",
+  "requestFramePermissions": []
+}
