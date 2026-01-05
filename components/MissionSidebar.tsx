@@ -20,8 +20,8 @@ const MissionSidebar: React.FC<MissionSidebarProps> = ({ missions, currentId, on
       <div className="p-3 border-b border-ice-300 dark:border-slate-800 bg-ice-200 dark:bg-slate-950 flex items-center gap-3">
         <Logo className="w-8 h-8 shadow-sm" />
         <div>
-           <h1 className="text-[10px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-widest leading-none mb-0.5">Research</h1>
-           <h2 className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest leading-none">SQL Trainer</h2>
+           <h1 className="text-[10px] font-bold text-slate-800 dark:text-slate-100 uppercase tracking-widest leading-none mb-0.5">SQL</h1>
+           <h2 className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest leading-none">Playground</h2>
         </div>
       </div>
       

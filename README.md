@@ -1,8 +1,8 @@
-# Research SQL Trainer
+# SQL Playground
 
 An interactive SQL training platform designed to teach relational database concepts through gamified missions. This application leverages an in-browser DuckDB-Wasm database for execution and integrates with Google's Gemini Pro API for intelligent SQL tutoring assistance.
 
-## Project Name: research-sql-trainer
+## Project Name: sql-playground
 
 ## Features:
 
