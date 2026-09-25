@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* App shell: fill the viewport, no page scroll (the panels scroll individually). */
+html,
+body,
+#root {
+  height: 100%;
+}
