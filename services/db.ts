@@ -1,7 +1,5 @@
 
 import * as duckdb from '@duckdb/duckdb-wasm';
-import mvpWorkerUrl from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
-import mvpWasmUrl from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import ehWorkerUrl from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import ehWasmUrl from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import { QueryResult, Scenario, Mission, TableSchema, ErdNode, ErdEdge } from '../types';
@@ -12,8 +10,13 @@ let conn: duckdb.AsyncDuckDBConnection | null = null;
 
 // DuckDB bundles are served from this app's own origin (relative to Vite `base`),
 // so the app stays self-contained on GitHub Pages with no external CDN at runtime.
+//
+// `DuckDBBundles` requires both keys, but `selectBundle` only picks `eh` on any
+// browser with Wasm exception handling (every modern target). Pointing `mvp` at the
+// same `eh` files keeps the type satisfied without shipping the separate 38 MB
+// `duckdb-mvp` WebAssembly payload, which is never selected.
 const LOCAL_BUNDLES: duckdb.DuckDBBundles = {
-  mvp: { mainModule: mvpWasmUrl, mainWorker: mvpWorkerUrl },
+  mvp: { mainModule: ehWasmUrl, mainWorker: ehWorkerUrl },
   eh: { mainModule: ehWasmUrl, mainWorker: ehWorkerUrl },
 };
 
