@@ -233,10 +233,16 @@ function App() {
                 )}
              </div>
              
-             {/* Description Popover Trigger (Optional, or just tooltip) */}
-             <div className="text-xs text-slate-500 truncate max-w-[30%] hidden md:block" title={currentMission?.desc}>
-                {currentMission?.desc}
-             </div>
+             {/* Mission brief: the student must always be able to read the full
+                 objective, so it gets its own panel instead of a truncated one-liner. */}
+             {currentMission && (
+               <div className="flex items-start gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-sm">
+                  <span className="text-blue-500 font-bold text-[10px] uppercase tracking-wider shrink-0 mt-0.5">Objetivo</span>
+                  <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap break-words">
+                    {currentMission.desc}
+                  </p>
+               </div>
+             )}
           </div>
 
           <div className="flex-1 flex flex-col p-2 gap-2 overflow-hidden">
