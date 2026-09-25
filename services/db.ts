@@ -1,24 +1,32 @@
 
 import * as duckdb from '@duckdb/duckdb-wasm';
+import mvpWorkerUrl from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
+import mvpWasmUrl from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
+import ehWorkerUrl from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
+import ehWasmUrl from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import { QueryResult, Scenario, Mission, TableSchema, ErdNode, ErdEdge } from '../types';
 import { BOOTSTRAP_SQL } from '../constants';
 
 let db: duckdb.AsyncDuckDB | null = null;
 let conn: duckdb.AsyncDuckDBConnection | null = null;
 
+// DuckDB bundles are served from this app's own origin (relative to Vite `base`),
+// so the app stays self-contained on GitHub Pages with no external CDN at runtime.
+const LOCAL_BUNDLES: duckdb.DuckDBBundles = {
+  mvp: { mainModule: mvpWasmUrl, mainWorker: mvpWorkerUrl },
+  eh: { mainModule: ehWasmUrl, mainWorker: ehWorkerUrl },
+};
+
 // Initialize the database and ensure system tables exist
 export const initDb = async (): Promise<void> => {
   if (!db) {
-    const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
-    const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
-    const workerBlob = new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' });
-    const workerUrl = URL.createObjectURL(workerBlob);
-    const worker = new Worker(workerUrl);
-    const logger = new duckdb.ConsoleLogger();
+    const bundle = await duckdb.selectBundle(LOCAL_BUNDLES);
+    const worker = await duckdb.createWorker(bundle.mainWorker!);
+    const logger = new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING);
     db = new duckdb.AsyncDuckDB(logger, worker);
-    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    await db.instantiate(bundle.mainModule, bundle.pthreadWorker ?? null);
   }
-  
+
   if (conn) {
     await conn.close();
   }

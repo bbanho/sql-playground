@@ -1,69 +1,62 @@
 # SQL Playground
 
-An interactive SQL training platform designed to teach relational database concepts through gamified missions. This application leverages an in-browser DuckDB-Wasm database for execution and integrates with Google's Gemini Pro API for intelligent SQL tutoring assistance.
+An interactive SQL training platform that teaches relational database concepts through
+gamified missions. The entire application runs **serverless in the browser**: an in-browser
+[DuckDB-Wasm](https://duckdb.org/docs/api/wasm) engine executes every query client-side, so
+there is no backend, no database server, and no network round-trip to run a lesson.
 
-## Project Name: sql-playground
+## Features
 
-## Features:
+- **Interactive SQL editor** — write and execute SQL directly in the page.
+- **Mission-based learning** — 25 missions with descriptions, expected queries, and success criteria.
+- **Real in-browser engine** — DuckDB-Wasm compiles and runs actual SQL; this is not a parser or a mock.
+- **Result visualization** — tabular output compared against the expected result.
+- **Schema viewer & ERD** — inspect tables and an Entity-Relationship Diagram generated from live metadata.
+- **Progress tracking** — completed missions are persisted per scenario inside DuckDB.
+- **DB console & debug widget** — run ad-hoc SQL and inspect engine state.
+- **Dark mode & font sizing** — persisted across sessions.
 
-*   **Interactive SQL Editor:** Write and execute SQL queries directly in the browser.
-*   **Mission-Based Learning:** Progress through structured scenarios and missions, each with specific objectives and success criteria.
-*   **In-Browser Database:** Powered by DuckDB-Wasm for fast, client-side SQL execution without server-side dependencies.
-*   **AI SQL Tutor (Gemini Pro):** Get hints and guidance from an AI tutor (via Google GenAI) when facing challenges or syntax errors.
-*   **Result Visualization:** View query results in a tabular format, compare against expected outputs.
-*   **Schema Viewer & ERD:** Explore database schema and visualize Entity-Relationship Diagrams (ERD) dynamically.
-*   **Session Progress Tracking:** Save and load progress on missions.
-*   **Debugging Tools:** Integrated Debug Widget and Console Terminal for advanced insights.
-*   **Customization:** Dark mode, font size adjustments.
+## Technologies
 
-## Technologies Used:
+- **React 19** + **Vite 6** + **TypeScript**
+- **DuckDB-Wasm** — the SQL engine, compiled to WebAssembly
+- **Tailwind CSS** (via CDN)
 
-*   **Frontend Framework:** React (with Vite for fast development)
-*   **Language:** TypeScript
-*   **Database:** DuckDB-Wasm (in-browser analytical database)
-*   **AI Integration:** Google GenAI (for Gemini Pro API interaction)
-*   **Styling:** Tailwind CSS
-*   **Data Visualization:** D3.js (likely used for ERD, though not directly in diff, it's a dependency in package.json)
+## Getting started
 
-## Getting Started:
+Requires Node.js 20+.
 
-1.  **Prerequisites:** Node.js (v20 or higher) and npm/yarn.
-2.  **Clone the repository.**
-3.  **Install dependencies:**
-    ```bash
-    npm install
-    # or
-    yarn install
-    ```
-4.  **Run the development server:**
-    ```bash
-    npm run dev
-    # or
-    yarn dev
-    ```
-    The application will typically be available at `http://localhost:5173`.
-5.  **Build for production:**
-    ```bash
-    npm run build
-    # or
-    yarn build
-    ```
+```bash
+npm install
+npm run dev      # dev server, http://localhost:5173
+npm run build    # production build -> dist/
+npm run preview  # serve the production build locally
+```
 
-## Mission Structure:
+## Deployment
 
-The application guides users through various SQL missions, each defined with a description, expected SQL query, and a success message. Progress is tracked per scenario.
+The app is a fully static SPA and deploys to **GitHub Pages**.
 
-## Contributing:
+Build output goes to `dist/`; deployment runs from the GitHub Actions workflow in
+`.github/workflows/`. Configure **Settings → Pages → Source → GitHub Actions**.
 
-Contributions are welcome! Please follow the project's [GitHub Standards](link-to-github_standards.md) when submitting changes. All code changes must go through a Pull Request.
+Asset paths are emitted relative (`base: './'`), so the same build works both at a custom
+domain root and under a project subpath.
 
-## Status:
+## Architecture notes
 
-This project is in active development, focusing on enhancing interactive learning and AI tutoring capabilities.
+- **Flat source layout.** Components, services, and constants live at the repository root
+  (`App.tsx`, `components/`, `services/`, `constants.ts`). There is no `src/` directory.
+- **DuckDB bundles are local.** The worker and `.wasm` payloads are served from the app's own
+  origin instead of a CDN, so DuckDB loads with no external dependency at runtime.
+- **No API key is embedded.** The application contains no AI provider integration; the
+  tutor feature is not currently wired up.
 
-## License:
+## Status
 
-[License information to be added, e.g., MIT, Apache 2.0]
+Actively developed. The AI SQL tutor mentioned in earlier versions of this README was
+removed along with its broken provider module; see the pull request for details.
 
----
-*(Auto-generated `README.md` by Gemini CLI Agent based on code analysis.)*
+## License
+
+See [LICENSE](./LICENSE).
