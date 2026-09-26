@@ -29,6 +29,26 @@ export const BOOTSTRAP_SQL = `
     FOREIGN KEY(scenario_id) REFERENCES System_Scenarios(id)
   );
 
+  -- Student-owned question bank. The student is the only author; the AI is a
+  -- suggestion engine. Progression and questions live in the student's own
+  -- browser (DuckDB WASM) and are exported as JSON at will.
+  ALTER TABLE System_Missions ADD COLUMN IF NOT EXISTS difficulty TEXT;
+  ALTER TABLE System_Missions ADD COLUMN IF NOT EXISTS tags TEXT;
+  ALTER TABLE System_Missions ADD COLUMN IF NOT EXISTS source TEXT;
+  ALTER TABLE System_Missions ADD COLUMN IF NOT EXISTS origin TEXT;
+
+  -- Auditable record of AI-assisted edits, so the student can see what the
+  -- model touched and revert anything it got wrong.
+  CREATE TABLE IF NOT EXISTS System_Gen_Log (
+    id INTEGER PRIMARY KEY,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    prompt TEXT,
+    model TEXT,
+    accepted INTEGER,
+    rejected INTEGER,
+    payload TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS System_Progress (
     scenario_id TEXT,
     mission_id INTEGER,

@@ -1,0 +1,21 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "sql-playground-gemini"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# Secrets are NOT set here. They are created once with:
+#   npx wrangler secret put CLIENT_ID
+#   npx wrangler secret put CLIENT_SECRET
+# ...and live encrypted in Cloudflare, never in this file or in git.
+
+[vars]
+# Where the SPA lives. The Worker redirects here after a successful login.
+APP_URL = "https://sql-playground.axio.eng.br/beta/"
+
+# Origin allowed to call this Worker with credentials. A request from any other
+# origin is not given an Access-Control-Allow-Origin, so a third-party site
+# cannot drive the student's Google session through the browser.
+ALLOWED_ORIGIN = "https://sql-playground.axio.eng.br"
+
+[observability]
+enabled = true
