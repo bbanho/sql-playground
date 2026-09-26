@@ -87,9 +87,7 @@ const QuestionGenerator: React.FC<{
       </button>
 
       {disabled && !busy && (
-        <p className="text-[10px] text-orange-500 leading-tight">
-          Configure uma credencial do Gemini primeiro, na aba Assistente.
-        </p>
+        <p className="text-[10px] text-orange-500 leading-tight">Aguarde o processo atual terminar.</p>
       )}
       {error && <p className="text-[10px] text-red-500 leading-tight">{error}</p>}
 

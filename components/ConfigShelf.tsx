@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { downloadDatabaseBackup, factoryReset, clearProgress, saveGeneratedQuestions, serializeSchema } from '../services/db';
-import { getAuthStatus } from '../services/ai';
 import AiSettings from './AiSettings';
 import QuestionGenerator from './QuestionGenerator';
 import { QuestionDraft } from '../services/ai';
@@ -18,13 +17,11 @@ const ConfigShelf: React.FC<ConfigShelfProps> = ({ onResetComplete, activeScenar
   const [showDanger, setShowDanger] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [tab, setTab] = useState<Tab>('ai');
-  const [aiReady, setAiReady] = useState(false);
   const [schema, setSchema] = useState('');
   const [savedMsg, setSavedMsg] = useState('');
 
   useEffect(() => {
     if (!isOpen) return;
-    getAuthStatus().then((s) => setAiReady(s.ready));
     if (!schema) serializeSchema().then(setSchema).catch(() => setSchema(''));
   }, [isOpen, schema]);
 
@@ -111,7 +108,7 @@ const ConfigShelf: React.FC<ConfigShelfProps> = ({ onResetComplete, activeScenar
                 <div>
                   <QuestionGenerator
                     schema={schema}
-                    disabled={!aiReady || isProcessing}
+                    disabled={isProcessing}
                     onAccept={handleAcceptDrafts}
                   />
                   {savedMsg && <p className="text-[10px] text-green-500 mt-2">{savedMsg}</p>}

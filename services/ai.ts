@@ -1,36 +1,49 @@
 // AI study assistant.
 //
-// Two authentication paths, chosen by the student in ConfigShelf:
+// Design constraint: the app is static and open. There is no backend, no OAuth
+// relay, and no secret belonging to this project. Whatever credential is used
+// belongs to the student and never leaves their machine.
 //
-//   OAuth  — the student signs in with Google. No key ever reaches the browser.
-//            Requires the Cloudflare Worker in /worker, which holds the client
-//            secret and keeps the access token in an httpOnly cookie.
+// Two sources, both run entirely in the browser:
 //
-//   API key — the student pastes their own Gemini key. It is stored in this
-//            browser's localStorage, sent only to Google from their machine, and
-//            never bundled, committed, or shipped with the app.
+//   local   An OpenAI-compatible endpoint on the student's own machine
+//           (Ollama, LM Studio, llama.cpp). No credential at all. This is the
+//           default, because a tool that asks for nothing can be used by anyone.
 //
-// Whichever they pick, the credential belongs to the student and stays on their
-// machine. The system prompt is theirs too: it is configurable rather than
-// hardcoded, because the study method is a personal choice, not a product
-// decision.
+//   gemini  The student's personal Gemini API key, pasted by them and kept in
+//           this browser's localStorage. It is sent from their machine straight
+//           to Google and is never bundled, committed, or shipped.
+//
+// The system prompt is theirs too: configurable rather than hardcoded, because
+// the study method is a personal choice, not a product decision.
 
 const API_KEY_STORAGE = 'sqlpg.gemini.apiKey';
 const PROMPT_STORAGE = 'sqlpg.gemini.systemPrompt';
 const MODEL_STORAGE = 'sqlpg.gemini.model';
 const HISTORY_STORAGE = 'sqlpg.gemini.history';
-const AUTH_MODE_STORAGE = 'sqlpg.gemini.authMode';
+const SOURCE_STORAGE = 'sqlpg.gemini.source';
+const ENDPOINT_STORAGE = 'sqlpg.gemini.endpoint';
 
-// Deployed Worker, holding the OAuth client secret. See worker/README.md.
-export const RELAY_URL = 'https://sql-playground-gemini.bmbanho.workers.dev';
 export const GEMINI_KEY_URL = 'https://aistudio.google.com/app/apikey';
 export const DEFAULT_MODEL = 'gemini-2.5-flash';
+export const DEFAULT_ENDPOINT = 'http://localhost:11434/v1';
 
-export type AuthMode = 'oauth' | 'apikey';
+export type AiSource = 'local' | 'gemini';
+
+export type QuestionDraft = {
+  title: string;
+  description: string;
+  expected_sql: string;
+  success_message: string;
+  difficulty: 'facil' | 'medio' | 'dificil';
+  tags: string[];
+};
+
+export type ChatMessage = { role: 'user' | 'model'; text: string };
 
 /**
- * Default study tutor. Configurable and overridable by the student — this is
- * the contract the model is held to, not a suggestion.
+ * Default study tutor. Configurable and overridable by the student: this is the
+ * contract the model is held to, not a suggestion.
  */
 export const DEFAULT_SYSTEM_PROMPT = `Você é um tutor de SQL didático em uma universidade brasileira.
 
@@ -52,17 +65,6 @@ AO GERAR EXERCÍCIOS:
 - Varie a dificuldade de forma progressiva.
 `;
 
-export type QuestionDraft = {
-  title: string;
-  description: string;
-  expected_sql: string;
-  success_message: string;
-  difficulty: 'facil' | 'medio' | 'dificil';
-  tags: string[];
-};
-
-export type ChatMessage = { role: 'user' | 'model'; text: string };
-
 const readStore = (key: string): string | null => {
   try {
     return localStorage.getItem(key);
@@ -76,15 +78,15 @@ const writeStore = (key: string, value: string | null): void => {
     if (value === null) localStorage.removeItem(key);
     else localStorage.setItem(key, value);
   } catch {
-    /* storage unavailable (private mode); AI just won't persist */
+    /* storage unavailable (private mode); settings just won't persist */
   }
 };
 
-export const getAuthMode = (): AuthMode => {
-  const stored = readStore(AUTH_MODE_STORAGE);
-  return stored === 'oauth' || stored === 'apikey' ? stored : 'oauth';
+export const getSource = (): AiSource => {
+  const stored = readStore(SOURCE_STORAGE);
+  return stored === 'gemini' ? 'gemini' : 'local';
 };
-export const setAuthMode = (mode: AuthMode): void => writeStore(AUTH_MODE_STORAGE, mode);
+export const setSource = (source: AiSource): void => writeStore(SOURCE_STORAGE, source);
 
 export const getApiKey = (): string => readStore(API_KEY_STORAGE) ?? '';
 export const setApiKey = (key: string): void => writeStore(API_KEY_STORAGE, key.trim());
@@ -94,6 +96,9 @@ export const setSystemPrompt = (prompt: string): void => writeStore(PROMPT_STORA
 
 export const getModel = (): string => readStore(MODEL_STORAGE) ?? DEFAULT_MODEL;
 export const setModel = (model: string): void => writeStore(MODEL_STORAGE, model.trim());
+
+export const getEndpoint = (): string => readStore(ENDPOINT_STORAGE) ?? DEFAULT_ENDPOINT;
+export const setEndpoint = (url: string): void => writeStore(ENDPOINT_STORAGE, url.trim());
 
 export const getHistory = (): ChatMessage[] => {
   const raw = readStore(HISTORY_STORAGE);
@@ -111,108 +116,97 @@ export const setHistory = (history: ChatMessage[]): void =>
 
 export const clearHistory = (): void => writeStore(HISTORY_STORAGE, null);
 
-/** Strip markdown fences and any prose around the JSON payload. */
+/** Strip markdown fences and any prose wrapped around the JSON payload. */
 function extractJson(text: string): string {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const body = fenced ? fenced[1] : text;
-  const start = body.indexOf('{');
-  const arr = body.indexOf('[');
-  let from = -1;
-  if (start >= 0 && arr >= 0) from = Math.min(start, arr);
-  else from = Math.max(start, arr);
+  const brace = body.indexOf('{');
+  const bracket = body.indexOf('[');
+  let from: number;
+  if (brace >= 0 && bracket >= 0) from = Math.min(brace, bracket);
+  else from = Math.max(brace, bracket);
   if (from < 0) return body.trim();
   const to = Math.max(body.lastIndexOf('}'), body.lastIndexOf(']'));
   return body.slice(from, to + 1);
 }
 
-/** Which credential is usable right now. */
-export const getAuthStatus = async (): Promise<{ ready: boolean; email?: string }> => {
-  if (getAuthMode() === 'apikey') {
-    return { ready: getApiKey().length > 0 };
-  }
-  try {
-    const res = await fetch(`${RELAY_URL}/session`, { credentials: 'include' });
-    if (!res.ok) return { ready: false };
-    const data = (await res.json()) as { authenticated?: boolean; email?: string };
-    return { ready: !!data.authenticated, email: data.email };
-  } catch {
-    return { ready: false };
-  }
-};
-
-export const startGoogleLogin = (): void => {
-  window.location.href = `${RELAY_URL}/auth/google`;
-};
-
-export const logout = async (): Promise<void> => {
-  try {
-    await fetch(`${RELAY_URL}/logout`, { credentials: 'include' });
-  } catch {
-    /* nothing to do if the relay is unreachable */
-  }
+/** Whether a usable configuration exists. The local path needs nothing. */
+export const getAuthStatus = async (): Promise<{ ready: boolean; detail?: string }> => {
+  if (getSource() === 'local') return { ready: true, detail: getEndpoint() };
+  return { ready: getApiKey().length > 0, detail: GEMINI_KEY_URL };
 };
 
 /**
- * One call to Gemini, whichever credential is configured.
+ * One call to a chat model, whichever source is configured.
  *
- * The relay path deliberately sends no Authorization header: the Worker reads
- * the token from the httpOnly cookie and attaches it server-side, so the browser
- * never handles it.
+ * The two APIs disagree on shape, so the response is read defensively rather
+ * than assuming one of them: a local model may answer with OpenAI's
+ * `choices[0].message.content` and Gemini with `candidates[0]...parts`.
  */
-const callGemini = async (systemPrompt: string, contents: unknown[]): Promise<string> => {
-  const model = getModel();
-  const path = `models/${encodeURIComponent(model)}:generateContent`;
-  const payload = {
-    system_instruction: { parts: [{ text: systemPrompt }] },
-    contents,
-    generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
-  };
-
+const callModel = async (systemPrompt: string, contents: { role: string; text: string }[]): Promise<string> => {
+  const source = getSource();
   let res: Response;
-  if (getAuthMode() === 'oauth') {
-    res = await fetch(`${RELAY_URL}/api/gemini/${path}`, {
+
+  if (source === 'local') {
+    const base = getEndpoint().replace(/\/+$/, '');
+    res = await fetch(`${base}/chat/completions`, {
       method: 'POST',
-      credentials: 'include',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        model: getModel(),
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...contents.map((c) => ({ role: c.role, content: c.text })),
+        ],
+        temperature: 0.7,
+        max_tokens: 4096,
+        stream: false,
+      }),
     });
-    if (res.status === 401) {
-      throw new Error('Sessão expirada. Entre com o Google novamente.');
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Endpoint local respondeu ${res.status}. ${body.slice(0, 160)}`);
     }
   } else {
     const key = getApiKey();
-    if (!key) {
-      throw new Error(
-        `Sem credencial. Adicione sua chave em ${GEMINI_KEY_URL} ou entre com o Google.`,
-      );
-    }
+    if (!key) throw new Error(`Sem credencial. Pegue uma chave em ${GEMINI_KEY_URL}.`);
+    const model = encodeURIComponent(getModel());
     res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/${path}?key=${encodeURIComponent(key)}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: contents.map((c) => ({
+            role: c.role === 'model' ? 'model' : 'user',
+            parts: [{ text: c.text }],
+          })),
+          generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
+        }),
       },
     );
-    if (res.status === 400 && /API key not valid|API_KEY_INVALID/i.test(await res.clone().text())) {
-      throw new Error('Chave da API recusada pelo Google. Confira em ' + GEMINI_KEY_URL);
+    if (res.status === 400) {
+      throw new Error('Chave recusada pelo Google. Confira em ' + GEMINI_KEY_URL);
     }
-    if (res.status === 429) throw new Error('Cota do Gemini esgotada. Aguarde ou troque de modelo.');
+    if (res.status === 429) throw new Error('Cota do Gemini esgotada.');
     if (res.status === 403) {
       throw new Error('Acesso negado (403). A API do Gemini pode não estar habilitada para esta chave.');
     }
-  }
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Erro do Gemini (${res.status}): ${body.slice(0, 200)}`);
+    if (!res.ok) throw new Error(`Erro do Gemini (${res.status}): ${(await res.text()).slice(0, 160)}`);
   }
 
   const data = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
     candidates?: { content?: { parts?: { text?: string }[] } }[];
   };
-  const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
-  if (!text) throw new Error('O Gemini devolveu uma resposta vazia.');
+
+  const text =
+    data.choices?.[0]?.message?.content ??
+    data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ??
+    '';
+
+  if (!text) throw new Error('O modelo devolveu uma resposta vazia.');
   return text;
 };
 
@@ -220,14 +214,11 @@ const callGemini = async (systemPrompt: string, contents: unknown[]): Promise<st
 export const askTutor = async (question: string, context = ''): Promise<string> => {
   const history = getHistory();
   const contents = [
-    ...history.map((m) => ({
-      role: m.role === 'model' ? 'model' : 'user',
-      parts: [{ text: m.text }],
-    })),
-    { role: 'user', parts: [{ text: context ? `${context}\n\n---\n\n${question}` : question }] },
+    ...history.map((m) => ({ role: m.role === 'model' ? 'model' : 'user', text: m.text })),
+    { role: 'user', text: context ? `${context}\n\n---\n\n${question}` : question },
   ];
 
-  const reply = await callGemini(getSystemPrompt(), contents);
+  const reply = await callModel(getSystemPrompt(), contents);
   setHistory([...history, { role: 'user', text: question }, { role: 'model', text: reply }]);
   return reply;
 };
@@ -258,22 +249,19 @@ Responda SOMENTE com um array JSON, cada elemento:
   "tags": ["tag1", "tag2"]
 }`;
 
-  const raw = await callGemini(
-    getSystemPrompt() + '\n\n' + instruction,
-    [{ role: 'user', parts: [{ text: 'Gere os exercicios agora.' }] }],
-  );
+  const raw = await callModel(getSystemPrompt() + '\n\n' + instruction, [
+    { role: 'user', text: 'Gere os exercicios agora.' },
+  ]);
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(extractJson(raw));
   } catch {
-    throw new Error('O Gemini nao devolveu JSON valido. Tente gerar novamente.');
+    throw new Error('O modelo nao devolveu JSON valido. Tente gerar novamente.');
   }
 
   const list = Array.isArray(parsed) ? parsed : (parsed as { questions?: unknown })?.questions;
-  if (!Array.isArray(list)) {
-    throw new Error('O Gemini nao devolveu uma lista de exercicios.');
-  }
+  if (!Array.isArray(list)) throw new Error('O modelo nao devolveu uma lista de exercicios.');
 
   return (list as QuestionDraft[])
     .filter((q) => q && q.title && q.description && q.expected_sql)
@@ -282,9 +270,7 @@ Responda SOMENTE com um array JSON, cada elemento:
       description: String(q.description),
       expected_sql: String(q.expected_sql),
       success_message: String(q.success_message ?? 'Missao concluida.'),
-      difficulty: (['facil', 'medio', 'dificil'].includes(q.difficulty)
-        ? q.difficulty
-        : opts.difficulty) as QuestionDraft['difficulty'],
+      difficulty: (['facil', 'medio', 'dificil'].includes(q.difficulty) ? q.difficulty : opts.difficulty) as QuestionDraft['difficulty'],
       tags: Array.isArray(q.tags) ? q.tags.map(String) : [],
     }));
 };

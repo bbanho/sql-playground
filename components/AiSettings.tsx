@@ -1,136 +1,84 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  AuthMode,
-  getAuthMode,
-  setAuthMode,
+  AiSource,
+  getSource,
+  setSource,
   getApiKey,
   setApiKey,
   getSystemPrompt,
   setSystemPrompt,
   getModel,
   setModel,
-  getAuthStatus,
-  startGoogleLogin,
-  logout,
+  getEndpoint,
+  setEndpoint,
   DEFAULT_SYSTEM_PROMPT,
   GEMINI_KEY_URL,
-  RELAY_URL,
 } from '../services/ai';
 
 /**
- * Gemini credentials and tutor prompt.
+ * Model source and tutor prompt.
  *
- * The credential belongs to the student. OAuth means no key ever reaches this
- * browser; the API key path is a fallback for students who do not want to sign
- * in with Google, and their key stays in this browser's localStorage.
- *
- * The system prompt is editable on purpose. Study method is a personal choice,
- * so this is a setting, not a constant baked into the app.
+ * There is no sign-in and no secret belonging to this project. The default
+ * source is a local endpoint on the student's own machine, which needs no
+ * credential at all. The alternative is their personal Gemini key, pasted by
+ * them and kept in this browser.
  */
 const AiSettings: React.FC = () => {
-  const [mode, setMode] = useState<AuthMode>(getAuthMode());
+  const [source, setSourceState] = useState<AiSource>(getSource());
   const [apiKey, setKey] = useState(getApiKey());
   const [prompt, setPrompt] = useState(getSystemPrompt());
   const [model, setModelValue] = useState(getModel());
-  const [email, setEmail] = useState<string | undefined>();
-  const [ready, setReady] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
+  const [endpoint, setEndpointState] = useState(getEndpoint());
 
-  const refresh = useCallback(async () => {
-    setBusy(true);
-    const status = await getAuthStatus();
-    setReady(status.ready);
-    setEmail(status.email);
-    setBusy(false);
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  // Coming back from Google's consent screen is a fresh page load, so the
-  // session has to be re-read on mount rather than assumed.
-  useEffect(() => {
-    const url = new URLSearchParams(window.location.search);
-    if (url.get('gemini') === 'signed-in') {
-      setMessage('Login realizado.');
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
-
-  const pickMode = (next: AuthMode) => {
-    setMode(next);
-    setAuthMode(next);
-    setMessage('');
-    refresh();
-  };
-
-  const saveKey = () => {
-    setApiKey(apiKey);
-    refresh();
-  };
-
-  const signOut = async () => {
-    await logout();
-    setEmail(undefined);
-    refresh();
+  const pick = (next: AiSource) => {
+    setSourceState(next);
+    setSource(next);
   };
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-[10px] font-bold text-slate-500 uppercase">Assistente Gemini</h4>
-        <span
-          className={`text-[10px] font-mono ${ready ? 'text-green-500' : 'text-slate-400'}`}
-        >
-          {busy ? '...' : ready ? 'PRONTO' : 'SEM CREDENCIAL'}
-        </span>
+        <h4 className="text-[10px] font-bold text-slate-500 uppercase">Assistente</h4>
+        <span className="text-[10px] font-mono text-green-500">SEM LOGIN</span>
       </div>
 
-      {/* Auth mode */}
+      <p className="text-[10px] text-slate-400 leading-tight">
+        O app é estático e não tem servidor. Nada é enviado para lugar nenhum
+        além do modelo que você escolher abaixo.
+      </p>
+
+      {/* Source */}
       <div className="flex gap-1">
-        {(['oauth', 'apikey'] as AuthMode[]).map((m) => (
+        {([['local', 'Modelo local'], ['gemini', 'Chave Gemini']] as [AiSource, string][]).map(([key, label]) => (
           <button
-            key={m}
-            onClick={() => pickMode(m)}
+            key={key}
+            onClick={() => pick(key)}
             className={`flex-1 px-2 py-1.5 text-[10px] uppercase tracking-wider rounded-sm border transition-colors ${
-              mode === m
+              source === key
                 ? 'bg-blue-500 text-white border-blue-500'
                 : 'text-slate-500 border-slate-300 dark:border-slate-700 hover:border-blue-400'
             }`}
           >
-            {m === 'oauth' ? 'Google OAuth' : 'Chave API'}
+            {label}
           </button>
         ))}
       </div>
 
-      {mode === 'oauth' ? (
+      {source === 'local' ? (
         <div className="space-y-2">
-          {email ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-600 dark:text-slate-300 truncate flex-1">
-                {email}
-              </span>
-              <button
-                onClick={signOut}
-                className="text-[10px] uppercase px-2 py-1 rounded-sm border border-slate-300 dark:border-slate-700 text-slate-500 hover:text-red-500"
-              >
-                Sair
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => startGoogleLogin()}
-              disabled={!ready}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
-            >
-              Entrar com Google
-            </button>
-          )}
+          <div>
+            <label className="text-[10px] text-slate-500 uppercase block mb-1">Endpoint</label>
+            <input
+              value={endpoint}
+              onChange={(e) => setEndpointState(e.target.value)}
+              onBlur={() => setEndpoint(endpoint)}
+              placeholder="http://localhost:11434/v1"
+              className="w-full px-2 py-1.5 text-xs font-mono bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-sm text-slate-700 dark:text-slate-200"
+            />
+          </div>
           <p className="text-[10px] text-slate-400 leading-tight">
-            O login passa pelo relay em {new URL(RELAY_URL).host}. Nenhum segredo vai
-            para o navegador.
+            Qualquer servidor compatível com OpenAI na sua máquina: Ollama, LM Studio,
+            llama.cpp. Nenhuma credencial é necessária.
           </p>
         </div>
       ) : (
@@ -139,7 +87,7 @@ const AiSettings: React.FC = () => {
             type="password"
             value={apiKey}
             onChange={(e) => setKey(e.target.value)}
-            onBlur={saveKey}
+            onBlur={() => setApiKey(apiKey)}
             placeholder="AIza..."
             className="w-full px-2 py-1.5 text-xs font-mono bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-sm text-slate-700 dark:text-slate-200"
           />
@@ -152,7 +100,8 @@ const AiSettings: React.FC = () => {
             Obter uma chave no Google AI Studio
           </a>
           <p className="text-[10px] text-slate-400 leading-tight">
-            A chave fica só neste navegador, em localStorage. Nunca entra no bundle.
+            A chave fica só neste navegador, em localStorage. Sai da sua máquina
+            direto para o Google e nunca entra no bundle.
           </p>
         </div>
       )}
@@ -160,18 +109,28 @@ const AiSettings: React.FC = () => {
       {/* Model */}
       <div>
         <label className="text-[10px] text-slate-500 uppercase block mb-1">Modelo</label>
-        <select
-          value={model}
-          onChange={(e) => {
-            setModelValue(e.target.value);
-            setModel(e.target.value);
-          }}
-          className="w-full px-2 py-1.5 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-sm text-slate-700 dark:text-slate-200"
-        >
-          <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-          <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-          <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-        </select>
+        {source === 'local' ? (
+          <input
+            value={model}
+            onChange={(e) => setModelValue(e.target.value)}
+            onBlur={() => setModel(model)}
+            placeholder="llama3.1:8b"
+            className="w-full px-2 py-1.5 text-xs font-mono bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-sm text-slate-700 dark:text-slate-200"
+          />
+        ) : (
+          <select
+            value={model}
+            onChange={(e) => {
+              setModelValue(e.target.value);
+              setModel(e.target.value);
+            }}
+            className="w-full px-2 py-1.5 text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-sm text-slate-700 dark:text-slate-200"
+          >
+            <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+            <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+            <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+          </select>
+        )}
       </div>
 
       {/* System prompt */}
@@ -193,12 +152,10 @@ const AiSettings: React.FC = () => {
           className="w-full px-2 py-1.5 text-[10px] font-mono bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-sm text-slate-600 dark:text-slate-300 resize-y leading-relaxed"
         />
         <p className="text-[10px] text-slate-400 leading-tight mt-1">
-          Define como o Gemini atua como tutor. Editável porque o método de estudo é
+          Define como o modelo atua como tutor. Editável porque o método de estudo é
           escolha do aluno.
         </p>
       </div>
-
-      {message && <p className="text-[10px] text-blue-500">{message}</p>}
     </div>
   );
 };
