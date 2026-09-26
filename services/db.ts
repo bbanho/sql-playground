@@ -18,18 +18,17 @@ let conn: duckdb.AsyncDuckDBConnection | null = null;
 // The URLs MUST be absolute. duckdb-wasm constructs `new Request(url)` for the
 // WASM payload inside the worker, where a root-relative path has no base to
 // resolve against and throws "Failed to parse URL from /duckdb/duckdb-eh.wasm".
-// `new URL(path, location.origin)` yields the same origin regardless of the
-// deploy base, because the dev server and Pages both serve from the root.
 //
-// `DuckDBBundles` requires both keys, but `selectBundle` only picks `eh` on any
-// browser with Wasm exception handling (every modern target). Pointing `mvp` at the
-// same `eh` files keeps the type satisfied without shipping the separate 38 MB
-// `duckdb-mvp` WebAssembly payload, which is never selected.
-const assetUrl = (path: string): string => new URL(path, window.location.origin).href;
+// They must also honor the deploy base: the stable build serves from the domain
+// root while the beta build serves from /beta/, and BASE_URL is whichever that
+// is. Resolving against BASE_URL keeps a single code path correct in both, which
+// a hardcoded '/duckdb/...' or a bare 'duckdb/...' (origin-relative) would not.
+const assetUrl = (path: string): string =>
+  new URL(`${import.meta.env.BASE_URL}duckdb/${path}`, window.location.origin).href;
 
 const LOCAL_BUNDLES: duckdb.DuckDBBundles = {
-  mvp: { mainModule: assetUrl('duckdb/duckdb-eh.wasm'), mainWorker: assetUrl('duckdb/duckdb-browser-eh.worker.js') },
-  eh: { mainModule: assetUrl('duckdb/duckdb-eh.wasm'), mainWorker: assetUrl('duckdb/duckdb-browser-eh.worker.js') },
+  mvp: { mainModule: assetUrl('duckdb-eh.wasm'), mainWorker: assetUrl('duckdb-browser-eh.worker.js') },
+  eh: { mainModule: assetUrl('duckdb-eh.wasm'), mainWorker: assetUrl('duckdb-browser-eh.worker.js') },
 };
 
 // Initialize the database and ensure system tables exist

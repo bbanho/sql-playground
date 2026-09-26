@@ -11,8 +11,6 @@ const base = process.env.VITE_DEPLOY_BASE || './';
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  // Relative asset paths: the same build works when served from a custom domain
-  // root (sql-playground.axio.eng.br) and from a project subpath (/beta/).
   base,
   plugins: [react()],
   // DuckDB is not pre-bundled: its ~35MB WASM is synced into public/duckdb by
