@@ -29,11 +29,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # No `cache: npm` here. Each channel is checked out into its own
+      # subdirectory, so the lockfile setup-node would look for is not at the
+      # workspace root, and the step fails with "Dependencies lock file is not
+      # found". The two `npm ci` runs below each resolve their own lockfile.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       # --- stable: domain root -------------------------------------------------
       - name: Checkout main (stable)
