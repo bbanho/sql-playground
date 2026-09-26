@@ -5,6 +5,11 @@
 // ==========================================
 
 export const BOOTSTRAP_SQL = `
+  -- DuckDB-WASM defaults this to 0, which rejects any expression nesting deeper
+  -- than a bare column reference. The seed data below uses nested expressions
+  -- (CASE, COALESCE over generated values), so raise it before seeding.
+  SET max_expression_depth TO 1000;
+
   -- 1. System Tables
   CREATE TABLE IF NOT EXISTS System_Scenarios (
     id TEXT PRIMARY KEY,
