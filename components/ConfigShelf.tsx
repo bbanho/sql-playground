@@ -1,15 +1,32 @@
-
-import React, { useState } from 'react';
-import { downloadDatabaseBackup, factoryReset, clearProgress } from '../services/db';
+import React, { useEffect, useState } from 'react';
+import { downloadDatabaseBackup, factoryReset, clearProgress, saveGeneratedQuestions, serializeSchema } from '../services/db';
+import { getAuthStatus } from '../services/ai';
+import AiSettings from './AiSettings';
+import QuestionGenerator from './QuestionGenerator';
+import { QuestionDraft } from '../services/ai';
 
 interface ConfigShelfProps {
   onResetComplete: () => void;
+  activeScenarioId?: string;
+  onMissionsChanged?: () => void;
 }
 
-const ConfigShelf: React.FC<ConfigShelfProps> = ({ onResetComplete }) => {
+type Tab = 'ai' | 'questions' | 'maintenance';
+
+const ConfigShelf: React.FC<ConfigShelfProps> = ({ onResetComplete, activeScenarioId, onMissionsChanged }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showDanger, setShowDanger] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [tab, setTab] = useState<Tab>('ai');
+  const [aiReady, setAiReady] = useState(false);
+  const [schema, setSchema] = useState('');
+  const [savedMsg, setSavedMsg] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    getAuthStatus().then((s) => setAiReady(s.ready));
+    if (!schema) serializeSchema().then(setSchema).catch(() => setSchema(''));
+  }, [isOpen, schema]);
 
   const handleBackup = async () => {
     setIsProcessing(true);
@@ -37,6 +54,15 @@ const ConfigShelf: React.FC<ConfigShelfProps> = ({ onResetComplete }) => {
     }
   };
 
+  const handleAcceptDrafts = async (drafts: QuestionDraft[]) => {
+    if (!activeScenarioId) return;
+    setIsProcessing(true);
+    const n = await saveGeneratedQuestions(drafts, 'gerador-gemini', activeScenarioId);
+    setIsProcessing(false);
+    setSavedMsg(`${n} exercício(s) salvo(s) no cenário atual.`);
+    onMissionsChanged?.();
+  };
+
   return (
     <>
       {/* Trigger Icon */}
@@ -51,7 +77,7 @@ const ConfigShelf: React.FC<ConfigShelfProps> = ({ onResetComplete }) => {
       {/* Modal/Shelf */}
       {isOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-2xl rounded-sm w-full max-w-sm overflow-hidden flex flex-col">
+          <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-2xl rounded-sm w-full max-w-lg overflow-hidden flex flex-col">
             
             {/* Header */}
             <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex justify-between items-center">
@@ -60,8 +86,40 @@ const ConfigShelf: React.FC<ConfigShelfProps> = ({ onResetComplete }) => {
             </div>
 
             {/* Content */}
-            <div className="p-4 space-y-4">
-              
+            <div className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
+
+              {/* Tabs */}
+              <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
+                {([['ai', 'Assistente'], ['questions', 'Gerar'], ['maintenance', 'Manutenção']] as [Tab, string][]).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => { setTab(key); setSavedMsg(''); }}
+                    className={`px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider border-b-2 -mb-px transition-colors ${
+                      tab === key
+                        ? 'border-blue-500 text-blue-500'
+                        : 'border-transparent text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {tab === 'ai' && <AiSettings />}
+
+              {tab === 'questions' && (
+                <div>
+                  <QuestionGenerator
+                    schema={schema}
+                    disabled={!aiReady || isProcessing}
+                    onAccept={handleAcceptDrafts}
+                  />
+                  {savedMsg && <p className="text-[10px] text-green-500 mt-2">{savedMsg}</p>}
+                </div>
+              )}
+
+              {tab === 'maintenance' && (
+                <>
               {/* Standard Zone */}
               <div>
                 <h4 className="text-[10px] font-bold text-slate-500 uppercase mb-2">Manutenção</h4>
@@ -113,6 +171,8 @@ const ConfigShelf: React.FC<ConfigShelfProps> = ({ onResetComplete }) => {
                       FACTORY RESET (TUDO)
                     </button>
                 </div>
+              )}
+                </>
               )}
 
             </div>

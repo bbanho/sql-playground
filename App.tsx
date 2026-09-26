@@ -74,6 +74,15 @@ function App() {
 
   useEffect(() => { loadSystem(); }, []);
 
+  /**
+   * Re-read the active scenario's missions after AI drafts are accepted, so a
+   * generated exercise shows up in the sidebar without a page reload.
+   */
+  const reloadMissions = useCallback(async () => {
+    if (!activeScenario) return;
+    setMissions(await fetchMissions(activeScenario.id));
+  }, [activeScenario]);
+
   const selectScenario = async (scenario: Scenario) => {
     await loadScenarioEnvironment(scenario.seedSql);
     const loadedMissions = await fetchMissions(scenario.id);
@@ -322,6 +331,8 @@ function App() {
         onToggleDebug={() => setIsDebugOpen(!isDebugOpen)}
         onSystemReset={() => loadSystem()}
         dbStatus={isDbReady ? 'ready' : 'loading'}
+        activeScenarioId={activeScenario?.id}
+        onMissionsChanged={reloadMissions}
       />
 
       {/* 3. Floating/Modal Overlays */}

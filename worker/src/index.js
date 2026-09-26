@@ -99,15 +99,24 @@ async function sha256Base64Url(input) {
   return base64url(digest);
 }
 
-/** CORS for the SPA origin, with credentials so the session cookie is sent. */
+/**
+ * CORS for the SPA origin, with credentials so the session cookie is sent.
+ *
+ * ALLOWED_ORIGIN is a comma-separated allowlist because there is more than one
+ * legitimate origin: the production domain, the beta subdirectory is the same
+ * origin so it needs nothing extra, and localhost during development. Matching
+ * is exact, never a prefix or a wildcard: reflecting an arbitrary origin with
+ * credentials enabled would let any site drive the student's session.
+ */
 function corsHeaders(request, allowedOrigin) {
   const origin = request.headers.get('origin') || '';
-  // Echo the origin only when it matches the configured allowlist. Reflecting an
-  // arbitrary origin with credentials enabled would let any site drive the
-  // student's session.
-  const allow = !allowedOrigin || origin === allowedOrigin;
+  const allowlist = (allowedOrigin || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  const allow = allowlist.length === 0 || allowlist.includes(origin);
   return {
-    'access-control-allow-origin': allow ? origin : allowedOrigin,
+    'access-control-allow-origin': allow ? origin : allowlist[0] || '',
     'access-control-allow-credentials': 'true',
     'access-control-allow-headers': 'content-type',
     'access-control-allow-methods': 'GET,POST,OPTIONS',

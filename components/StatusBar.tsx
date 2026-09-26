@@ -13,18 +13,25 @@ interface StatusBarProps {
   onToggleDebug: () => void;
   onSystemReset: () => void;
   dbStatus: 'ready' | 'loading' | 'error';
+  activeScenarioId?: string;
+  onMissionsChanged?: () => void;
 }
 
-const StatusBar: React.FC<StatusBarProps> = ({ 
-  darkMode, setDarkMode, fontSize, setFontSize, 
-  onToggleTerminal, lastTerminalMsg, onToggleDebug, onSystemReset, dbStatus
+const StatusBar: React.FC<StatusBarProps> = ({
+  darkMode, setDarkMode, fontSize, setFontSize,
+  onToggleTerminal, lastTerminalMsg, onToggleDebug, onSystemReset, dbStatus,
+  activeScenarioId, onMissionsChanged
 }) => {
   return (
     <div className="h-8 bg-ice-300 dark:bg-slate-900 border-t border-ice-300 dark:border-slate-800 flex items-center justify-between px-2 select-none z-50">
-      
+
       {/* LEFT: System Controls */}
       <div className="flex items-center gap-3">
-        <ConfigShelf onResetComplete={onSystemReset} />
+        <ConfigShelf
+          onResetComplete={onSystemReset}
+          activeScenarioId={activeScenarioId}
+          onMissionsChanged={onMissionsChanged}
+        />
         
         <div className="h-4 w-px bg-slate-400 dark:bg-slate-700"></div>
 

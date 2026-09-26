@@ -129,6 +129,63 @@ export const fetchSchema = async (): Promise<TableSchema[]> => {
   return Array.from(schemaMap.entries()).map(([tableName, columns]) => ({ tableName, columns }));
 };
 
+/**
+ * Render the schema as a CREATE TABLE skeleton, for giving a model the exact
+ * tables and columns it is allowed to use. Without this the model invents
+ * columns that do not exist and the student gets exercises that cannot run.
+ */
+export const serializeSchema = async (): Promise<string> => {
+  const tables = await fetchSchema();
+  return tables
+    .map((t) => `${t.tableName}(${t.columns.join(', ')})`)
+    .join('\n');
+};
+
+/**
+ * Persist AI-generated exercises into the student's own question bank.
+ *
+ * These are the student's rows. The model proposed them and the student
+ * accepted them, so provenance is recorded: `source` says they came from the
+ * assistant and `origin` keeps the prompt topic, which makes it possible to
+ * tell generated material from seeded material later.
+ */
+export const saveGeneratedQuestions = async (
+  drafts: { title: string; description: string; expected_sql: string; success_message: string; difficulty: string; tags: string[] }[],
+  origin: string,
+  scenarioId: string,
+): Promise<number> => {
+  if (!conn) return 0;
+  if (drafts.length === 0) return 0;
+
+  const esc = (v: string) => String(v).replace(/'/g, "''");
+  const nextOrder = await nextMissionOrder(scenarioId);
+
+  for (let i = 0; i < drafts.length; i++) {
+    const d = drafts[i];
+    await conn.query(`
+      INSERT INTO System_Missions
+        (scenario_id, order_index, title, description, expected_sql, success_message,
+         difficulty, tags, source, origin)
+      VALUES
+        ('${esc(scenarioId)}', ${nextOrder + i}, '${esc(d.title)}', '${esc(d.description)}',
+         '${esc(d.expected_sql)}', '${esc(d.success_message)}', '${esc(d.difficulty)}',
+         '${esc((d.tags || []).join(','))}', 'gemini', '${esc(origin)}')
+    `);
+  }
+
+  return drafts.length;
+};
+
+/** The order_index to give the next mission appended to a scenario. */
+const nextMissionOrder = async (scenarioId: string): Promise<number> => {
+  if (!conn) return 0;
+  const res = await conn.query(
+    `SELECT COALESCE(MAX(order_index), 0) AS max_order FROM System_Missions WHERE scenario_id = '${scenarioId.replace(/'/g, "''")}'`,
+  );
+  const row = res.toArray()[0]?.toJSON() as { max_order: number } | undefined;
+  return Number(row?.max_order ?? 0) + 1;
+};
+
 // Basic ERD Generation (Dynamic based on tables)
 export const generateErdData = async (schemas: TableSchema[]): Promise<{nodes: ErdNode[], edges: ErdEdge[]}> => {
   const nodes: ErdNode[] = [];

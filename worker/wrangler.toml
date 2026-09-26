@@ -12,10 +12,13 @@ compatibility_date = "2025-01-01"
 # Where the SPA lives. The Worker redirects here after a successful login.
 APP_URL = "https://sql-playground.axio.eng.br/beta/"
 
-# Origin allowed to call this Worker with credentials. A request from any other
-# origin is not given an Access-Control-Allow-Origin, so a third-party site
-# cannot drive the student's Google session through the browser.
-ALLOWED_ORIGIN = "https://sql-playground.axio.eng.br"
+# Origins allowed to call this Worker with credentials, comma-separated. A
+# request from any other origin gets no Access-Control-Allow-Origin, so a
+# third-party site cannot drive the student's Google session through the
+# browser. Matching is exact, so a lookalike domain cannot slip in.
+#
+# The beta channel is a subdirectory of the same origin and needs no entry.
+ALLOWED_ORIGIN = "https://sql-playground.axio.eng.br,http://127.0.0.1:5199,http://localhost:5199"
 
 [observability]
 enabled = true

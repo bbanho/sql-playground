@@ -8,6 +8,8 @@ let googleCalls = [];
 
 const ORIGIN = 'https://sql-playground.axio.eng.br';
 const ENV = { CLIENT_ID: 'cid', CLIENT_SECRET: 'secret', ALLOWED_ORIGIN: ORIGIN, APP_URL: `${ORIGIN}/beta/` };
+// A second allowlist entry, as configured in production.
+const ENV_MULTI = { ...ENV, ALLOWED_ORIGIN: `${ORIGIN},http://127.0.0.1:5199` };
 
 function makeRequest(path, { method = 'GET', cookie = '', origin = ORIGIN } = {}) {
   return new Request(`https://relay.example${path}`, {
@@ -121,6 +123,26 @@ const check = (name, cond, extra = '') => (cond ? pass : fail).push(name + (extr
 {
   const res = await call(makeRequest('/logout', { method: 'POST' }));
   check('logout clears cookie', setCookies(res).some((x) => /pg_session=;/.test(x)));
+}
+
+// 9. multi-origin allowlist: both listed origins echoed, others rejected
+{
+  const prod = await worker.fetch(makeRequest('/session'), ENV_MULTI);
+  check('allowlist: production origin echoed', prod.headers.get('access-control-allow-origin') === ORIGIN, prod.headers.get('access-control-allow-origin'));
+
+  const local = await worker.fetch(makeRequest('/session', { origin: 'http://127.0.0.1:5199' }), ENV_MULTI);
+  check('allowlist: localhost echoed', local.headers.get('access-control-allow-origin') === 'http://127.0.0.1:5199', local.headers.get('access-control-allow-origin'));
+
+  const evil = await worker.fetch(makeRequest('/session', { origin: 'https://evil.example' }), ENV_MULTI);
+  check('allowlist: foreign origin rejected', evil.headers.get('access-control-allow-origin') !== 'https://evil.example', evil.headers.get('access-control-allow-origin'));
+
+  // A prefix of an allowed origin must not pass, or a lookalike domain would.
+  const lookalike = await worker.fetch(makeRequest('/session', { origin: 'https://sql-playground.axio.eng.br.evil.example' }), ENV_MULTI);
+  check('allowlist: lookalike prefix rejected', lookalike.headers.get('access-control-allow-origin') !== 'https://sql-playground.axio.eng.br.evil.example', lookalike.headers.get('access-control-allow-origin'));
+
+  // A single-origin config must not start allowing localhost by accident.
+  const strict = await worker.fetch(makeRequest('/session', { origin: 'http://127.0.0.1:5199' }), ENV);
+  check('allowlist: single-origin stays strict', strict.headers.get('access-control-allow-origin') !== 'http://127.0.0.1:5199', strict.headers.get('access-control-allow-origin'));
 }
 
 console.log('PASS (' + pass.length + '):'); pass.forEach((p) => console.log('  ok  ' + p));
