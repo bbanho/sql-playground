@@ -21,8 +21,8 @@ const MODEL_STORAGE = 'sqlpg.gemini.model';
 const HISTORY_STORAGE = 'sqlpg.gemini.history';
 const AUTH_MODE_STORAGE = 'sqlpg.gemini.authMode';
 
-// Deployed from worker/ — see worker/README.md for the hostname.
-export const RELAY_URL = 'https://sql-playground-gemini.<your-subdomain>.workers.dev';
+// Deployed Worker, holding the OAuth client secret. See worker/README.md.
+export const RELAY_URL = 'https://sql-playground-gemini.bmbanho.workers.dev';
 export const GEMINI_KEY_URL = 'https://aistudio.google.com/app/apikey';
 export const DEFAULT_MODEL = 'gemini-2.5-flash';
 
