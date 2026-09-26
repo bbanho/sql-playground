@@ -1,12 +1,16 @@
 {
   "name": "sql-playground",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.9.0",
   "type": "module",
   "scripts": {
+    "sync:duckdb": "node scripts/sync-duckdb.cjs",
+    "predev": "npm run sync:duckdb",
     "dev": "vite",
+    "prebuild": "npm run sync:duckdb",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify": "node scripts/verify-app.cjs"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "^1.30.0",

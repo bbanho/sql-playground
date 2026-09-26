@@ -137,3 +137,6 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# DuckDB runtime artifacts synced from node_modules by scripts/sync-duckdb.cjs
+public/duckdb/
