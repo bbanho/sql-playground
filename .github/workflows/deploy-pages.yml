@@ -1,66 +1,82 @@
 name: Deploy SQL Playground
 
-# main -> stable at the domain root
-# beta -> prerelease under /beta/
+# One deployment contains both channels:
+#   /       -> stable, built from main
+#   /beta/  -> prerelease, built from beta
+#
+# The two are staged into a single artifact and published together. A Pages
+# deployment replaces the whole site, so publishing one channel alone would
+# evict the other. This is also why there is a single upload-pages-artifact
+# step: deploy-pages resolves exactly one artifact named "github-pages", and
+# two uploads of that name fail the deployment.
 on:
   push:
     branches: [ "main", "beta" ]
   workflow_dispatch:
-    inputs:
-      channel:
-        description: "Channel to deploy"
-        required: true
-        default: stable
-        type: choice
-        options: [ stable, beta ]
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# Never let two deployments race. The last one wins, and a half-published site
+# would be worse than a slightly stale one.
 concurrency:
-  group: pages-${{ github.ref_name }}
+  group: pages
   cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - branch: main
-            channel: stable
-            base: './'
-            subdir: ''
-          - branch: beta
-            channel: beta
-            base: '/beta/'
-            subdir: 'beta'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ matrix.branch }}
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
+      # --- stable: domain root -------------------------------------------------
+      - name: Checkout main (stable)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: stable
+
+      - name: Install dependencies (stable)
         run: npm ci
+        working-directory: stable
 
-      - name: Build ${{ matrix.channel }}
+      - name: Build stable
         env:
-          VITE_DEPLOY_BASE: ${{ matrix.base }}
+          VITE_DEPLOY_BASE: './'
         run: npm run build
+        working-directory: stable
 
-      - name: Stage artifact
+      # --- beta: /beta/ ---------------------------------------------------------
+      - name: Checkout beta (prerelease)
+        uses: actions/checkout@v4
+        with:
+          ref: beta
+          path: beta
+
+      - name: Install dependencies (beta)
+        run: npm ci
+        working-directory: beta
+
+      - name: Build beta
+        env:
+          VITE_DEPLOY_BASE: '/beta/'
+        run: npm run build
+        working-directory: beta
+
+      - name: Stage both channels
         run: |
-          mkdir -p "${{ runner.temp }}/site/${{ matrix.subdir }}"
-          cp -r dist/. "${{ runner.temp }}/site/${{ matrix.subdir }}/"
+          mkdir -p "${{ runner.temp }}/site"
+          cp -r stable/dist/. "${{ runner.temp }}/site/"
+          mkdir -p "${{ runner.temp }}/site/beta"
+          cp -r beta/dist/. "${{ runner.temp }}/site/beta/"
+          echo "--- staged tree (top 2 levels) ---"
+          find "${{ runner.temp }}/site" -maxdepth 2 -not -path '*/assets/*' -not -name '*.wasm' | head -20
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
