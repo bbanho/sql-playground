@@ -155,10 +155,23 @@ process.on('exit', cleanup);
     })()`,
   );
   const objective = await evaluate(
-    `(() => { const p = [...document.querySelectorAll('p,div')].find(x => /Escreva|Retorne|Liste|Consulte|Apresente|Exibir|Quantos/i.test(x.innerText || '') && x.innerText.length > 20 && x.innerText.length < 400);
-      if (!p) return 'NOT_FOUND';
-      const r = p.getBoundingClientRect();
-      return { width: Math.round(r.width), height: Math.round(r.height), text: p.innerText.slice(0, 90) }; })()`,
+    `(() => {
+      // The brief is a landmark section; read its text rather than guessing at
+      // tag names, so the check survives the collapsed/expanded toggle.
+      const section = document.querySelector('section[aria-label*="Objetivo"]');
+      if (!section) return 'NOT_FOUND';
+      const text = section.innerText.replace(/^Objetivo\\s*/i, '').trim();
+      const el = section.querySelector('p, span');
+      const r = (el || section).getBoundingClientRect();
+      const scroll = section.querySelector('.overflow-y-auto');
+      return {
+        width: Math.round(r.width),
+        height: Math.round(r.height),
+        text: text.slice(0, 90),
+        collapsed: text.length > 0 && el && el.tagName === 'SPAN',
+        scrollable: !!scroll,
+      };
+    })()`,
   );
   const external = [
     ...new Set(

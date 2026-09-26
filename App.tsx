@@ -6,6 +6,7 @@ import {
   fetchSchema, generateErdData 
 } from './services/db';
 import MissionSidebar from './components/MissionSidebar';
+import MissionBrief from './components/MissionBrief';
 import SqlEditor from './components/SqlEditor';
 import ResultTable from './components/ResultTable';
 import SchemaViewer from './components/SchemaViewer';
@@ -232,18 +233,12 @@ function App() {
                   </div>
                 )}
              </div>
-             
-             {/* Mission brief: the student must always be able to read the full
-                 objective, so it gets its own panel instead of a truncated one-liner. */}
-             {currentMission && (
-               <div className="flex items-start gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-sm">
-                  <span className="text-blue-500 font-bold text-[10px] uppercase tracking-wider shrink-0 mt-0.5">Objetivo</span>
-                  <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap break-words">
-                    {currentMission.desc}
-                  </p>
-               </div>
-             )}
           </div>
+
+          {/* The objective lives below the top bar, not inside it: it is the
+              thing being graded, and long or multi-step briefs need real
+              vertical space plus their own scroll. */}
+          <MissionBrief mission={currentMission} fontSize={fontSize} />
 
           <div className="flex-1 flex flex-col p-2 gap-2 overflow-hidden">
              {/* Top Half: Editor */}
